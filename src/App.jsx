@@ -7,8 +7,10 @@ import {createSolanaRpc} from '@solana/kit';
 const SOLANA_CHAIN = 'solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp';
 
 const TOKENS = {
-  SOL: {label: 'SOL', asset: 'native-currency'},
-  USDC: {label: 'USDC', asset: 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v'}
+  USDC: {label: 'USDC', asset: 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v'},
+  'SOL-1': {label: 'SOL #1', asset: 'sol'},
+  'SOL-2': {label: 'SOL #2', asset: '11111111111111111111111111111111'},
+  'SOL-3': {label: 'SOL #3', asset: 'SOL'}
 };
 
 const PRESETS = ['25', '50', '100'];
