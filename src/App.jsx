@@ -159,7 +159,7 @@ export default function App() {
               </div>
 
               <div className="label spaced">Что покупаем</div>
-              <div className="presets two">
+              <div className="presets">
                 {Object.keys(TOKENS).map((key) => (
                   <button
                     key={key}
