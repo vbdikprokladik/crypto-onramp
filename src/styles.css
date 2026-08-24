@@ -323,3 +323,19 @@ body {
     grid-template-columns: 1fr;
   }
 }
+
+.balance {
+  margin-top: 4px;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.row-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 14px;
+}
+
+.row-actions .ghost {
+  flex: 1;
+}
