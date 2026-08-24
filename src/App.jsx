@@ -2,13 +2,23 @@ import {useMemo, useState} from 'react';
 import {usePrivy} from '@privy-io/react-auth';
 import {useFundWallet} from '@privy-io/react-auth/solana';
 
-const CHAIN = 'solana:mainnet';
 const PRESETS = ['0.25', '0.5', '1'];
 
 function shorten(address) {
   if (!address) return '';
   return `${address.slice(0, 4)}…${address.slice(-4)}`;
 }
+
+// Privy иногда не принимает часть параметров — пробуем от подробного к простому.
+function buildAttempts(address, amount) {
+  return [
+    {address, options: {amount: String(amount), asset: 'SOL'}},
+    {address, options: {amount: String(amount)}},
+    {address}
+  ];
+}
+
+const RETRYABLE = /not enabled|not supported|unsupported|invalid|unknown/i;
 
 export default function App() {
   const {ready, authenticated, login, logout, user} = usePrivy();
@@ -19,7 +29,6 @@ export default function App() {
   const [error, setError] = useState(null);
   const [copied, setCopied] = useState(false);
 
-  // адрес Solana-кошелька пользователя (встроенный или подключённый внешний)
   const solanaAddress = useMemo(() => {
     const accounts = user?.linkedAccounts ?? [];
     const embedded = accounts.find(
@@ -35,20 +44,23 @@ export default function App() {
     if (!solanaAddress || !amountValid) return;
     setError(null);
     setBusy(true);
-    try {
-      await fundWallet({
-        address: solanaAddress,
-        options: {
-          amount: String(amount),
-          asset: 'SOL',
-          chain: CHAIN
-        }
-      });
-    } catch (e) {
-      setError(e?.message || 'Не удалось открыть окно оплаты. Попробуй ещё раз.');
-    } finally {
-      setBusy(false);
+
+    let lastError = null;
+    for (const payload of buildAttempts(solanaAddress, amount)) {
+      try {
+        await fundWallet(payload);
+        setBusy(false);
+        return;
+      } catch (e) {
+        lastError = e;
+        const message = e?.message || '';
+        // если ошибка не про неподдерживаемые параметры — дальше пробовать смысла нет
+        if (!RETRYABLE.test(message)) break;
+      }
     }
+
+    setError(lastError?.message || 'Не удалось открыть окно оплаты.');
+    setBusy(false);
   }
 
   async function copyAddress() {
@@ -57,7 +69,7 @@ export default function App() {
       setCopied(true);
       setTimeout(() => setCopied(false), 1600);
     } catch {
-      /* буфер обмена недоступен — не страшно */
+      /* буфер обмена недоступен */
     }
   }
 
