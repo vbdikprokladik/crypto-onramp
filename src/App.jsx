@@ -7,7 +7,7 @@ import {createSolanaRpc} from '@solana/kit';
 const SOLANA_CHAIN = 'solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp';
 
 const TOKENS = {
-  SOL: {label: 'SOL', asset: 'So11111111111111111111111111111111111111112'},
+  SOL: {label: 'SOL', asset: 'native-currency'},
   USDC: {label: 'USDC', asset: 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v'}
 };
 
