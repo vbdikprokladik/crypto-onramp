@@ -9,11 +9,11 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "@privy-io/react-auth": "^3.33.1",
-    "@solana-program/memo": "^0.7.0",
-    "@solana-program/system": "^0.7.0",
-    "@solana-program/token": "^0.5.1",
-    "@solana/kit": "^2.1.0",
+    "@privy-io/react-auth": "^3.37.4",
+    "@solana-program/memo": "^0.13.0",
+    "@solana-program/system": "^0.14.0",
+    "@solana-program/token": "^0.16.0",
+    "@solana/kit": "^8.0.0",
     "buffer": "^6.0.3",
     "react": "^18.3.1",
     "react-dom": "^18.3.1"
