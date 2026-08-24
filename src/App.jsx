@@ -1,15 +1,16 @@
-import {useMemo, useState} from 'react';
+import {useCallback, useEffect, useMemo, useState} from 'react';
 import {usePrivy} from '@privy-io/react-auth';
-import {useFundWallet} from '@privy-io/react-auth/solana';
+import {useFundWallet, useExportWallet} from '@privy-io/react-auth/solana';
+import {createSolanaRpc} from '@solana/kit';
 
 const PRESETS = ['0.25', '0.5', '1'];
+const RPC_URL = import.meta.env.VITE_SOLANA_RPC || 'https://api.mainnet-beta.solana.com';
 
 function shorten(address) {
   if (!address) return '';
   return `${address.slice(0, 4)}…${address.slice(-4)}`;
 }
 
-// Privy иногда не принимает часть параметров — пробуем от подробного к простому.
 function buildAttempts(address, amount) {
   return [
     {address, options: {amount: String(amount), asset: 'SOL'}},
@@ -23,11 +24,13 @@ const RETRYABLE = /not enabled|not supported|unsupported|invalid|unknown/i;
 export default function App() {
   const {ready, authenticated, login, logout, user} = usePrivy();
   const {fundWallet} = useFundWallet();
+  const {exportWallet} = useExportWallet();
 
   const [amount, setAmount] = useState('0.5');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
   const [copied, setCopied] = useState(false);
+  const [balance, setBalance] = useState(null);
 
   const solanaAddress = useMemo(() => {
     const accounts = user?.linkedAccounts ?? [];
@@ -40,6 +43,22 @@ export default function App() {
 
   const amountValid = Number(amount) > 0;
 
+  const refreshBalance = useCallback(async () => {
+    if (!solanaAddress) return;
+    try {
+      const rpc = createSolanaRpc(RPC_URL);
+      const {value} = await rpc.getBalance(solanaAddress).send();
+      setBalance(Number(value) / 1_000_000_000);
+    } catch {
+      // публичный RPC часто режет браузерные запросы — просто не показываем баланс
+      setBalance(null);
+    }
+  }, [solanaAddress]);
+
+  useEffect(() => {
+    refreshBalance();
+  }, [refreshBalance]);
+
   async function handleBuy() {
     if (!solanaAddress || !amountValid) return;
     setError(null);
@@ -50,12 +69,11 @@ export default function App() {
       try {
         await fundWallet(payload);
         setBusy(false);
+        refreshBalance();
         return;
       } catch (e) {
         lastError = e;
-        const message = e?.message || '';
-        // если ошибка не про неподдерживаемые параметры — дальше пробовать смысла нет
-        if (!RETRYABLE.test(message)) break;
+        if (!RETRYABLE.test(e?.message || '')) break;
       }
     }
 
@@ -101,7 +119,7 @@ export default function App() {
 
           {ready && !authenticated && (
             <>
-              <p className="card-lede">Войди по почте или через Google, чтобы получить кошелёк.</p>
+              <p className="card-lede">Войди по почте, чтобы получить кошелёк.</p>
               <button className="primary" onClick={login}>
                 Войти
               </button>
@@ -115,6 +133,9 @@ export default function App() {
                   <div className="label">Твой кошелёк Solana</div>
                   <div className="address" title={solanaAddress || ''}>
                     {solanaAddress ? shorten(solanaAddress) : 'создаётся…'}
+                  </div>
+                  <div className="balance">
+                    {balance === null ? 'баланс недоступен' : `${balance.toFixed(4)} SOL`}
                   </div>
                 </div>
                 {solanaAddress && (
@@ -157,9 +178,18 @@ export default function App() {
 
               {error && <p className="error">{error}</p>}
 
+              <div className="row-actions">
+                <button className="ghost small" onClick={refreshBalance}>
+                  Обновить баланс
+                </button>
+                <button className="ghost small" onClick={() => exportWallet({address: solanaAddress})}>
+                  Забрать приватный ключ
+                </button>
+              </div>
+
               <p className="fine">
-                Оплата проходит на стороне Stripe. Комиссии и лимиты показываются перед
-                подтверждением.
+                Приватный ключ можно импортировать в Phantom или Solflare — тогда кошелёк будет
+                работать и без этого сайта. Никому его не показывай.
               </p>
             </>
           )}
@@ -169,7 +199,7 @@ export default function App() {
           <div className="step">
             <span className="num">1</span>
             <h3>Вход</h3>
-            <p>Почта или Google. Кошелёк создаётся сам.</p>
+            <p>Почта. Кошелёк создаётся сам.</p>
           </div>
           <div className="step">
             <span className="num">2</span>
