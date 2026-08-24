@@ -3,16 +3,17 @@ import {usePrivy, useFiatOnramp} from '@privy-io/react-auth';
 import {useExportWallet} from '@privy-io/react-auth/solana';
 import {createSolanaRpc} from '@solana/kit';
 
-// CAIP-2 идентификатор основной сети Solana
 const SOLANA_CHAIN = 'solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp';
 
+// USDC работает. Три варианта SOL — проверяем, какой примет Stripe.
 const TOKENS = {
   USDC: {label: 'USDC', asset: 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v'},
-  'SOL-1': {label: 'SOL #1', asset: 'sol'},
-  'SOL-2': {label: 'SOL #2', asset: '11111111111111111111111111111111'},
-  'SOL-3': {label: 'SOL #3', asset: 'SOL'}
+  SOL1: {label: 'SOL #1', asset: 'sol'},
+  SOL2: {label: 'SOL #2', asset: '11111111111111111111111111111111'},
+  SOL3: {label: 'SOL #3', asset: 'SOL'}
 };
 
+const DEFAULT_TOKEN = 'USDC';
 const PRESETS = ['25', '50', '100'];
 const RPC_URL = import.meta.env.VITE_SOLANA_RPC || 'https://api.mainnet-beta.solana.com';
 
@@ -26,13 +27,16 @@ export default function App() {
   const {fund} = useFiatOnramp();
   const {exportWallet} = useExportWallet();
 
-  const [token, setToken] = useState('SOL');
+  const [token, setToken] = useState(DEFAULT_TOKEN);
   const [amount, setAmount] = useState('50');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
   const [notice, setNotice] = useState(null);
   const [copied, setCopied] = useState(false);
   const [balance, setBalance] = useState(null);
+
+  // страховка: если ключ вдруг不 найден, не роняем страницу
+  const currentToken = TOKENS[token] ?? TOKENS[DEFAULT_TOKEN];
 
   const solanaAddress = useMemo(() => {
     const accounts = user?.linkedAccounts ?? [];
@@ -68,12 +72,9 @@ export default function App() {
 
     try {
       const result = await fund({
-        source: {
-          assets: ['usd', 'eur'],
-          defaultAsset: 'usd'
-        },
+        source: {assets: ['usd', 'eur'], defaultAsset: 'usd'},
         destination: {
-          asset: TOKENS[token].asset,
+          asset: currentToken.asset,
           chain: SOLANA_CHAIN,
           address: solanaAddress
         },
@@ -199,7 +200,7 @@ export default function App() {
                 disabled={!solanaAddress || !amountValid || busy}
                 onClick={handleBuy}
               >
-                {busy ? 'Открываю оплату…' : `Купить ${TOKENS[token].label}`}
+                {busy ? 'Открываю оплату…' : `Купить ${currentToken.label}`}
               </button>
 
               {error && <p className="error">{error}</p>}
