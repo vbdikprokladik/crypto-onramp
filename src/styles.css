@@ -339,3 +339,14 @@ body {
 .row-actions .ghost {
   flex: 1;
 }
+
+.presets.two {
+  grid-template-columns: repeat(2, 1fr);
+}
+
+.notice {
+  margin: 12px 0 0;
+  color: #6ee7a8;
+  font-size: 14px;
+  line-height: 1.5;
+}
