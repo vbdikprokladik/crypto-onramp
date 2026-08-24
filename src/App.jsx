@@ -1,9 +1,17 @@
 import {useCallback, useEffect, useMemo, useState} from 'react';
-import {usePrivy} from '@privy-io/react-auth';
-import {useFundWallet, useExportWallet} from '@privy-io/react-auth/solana';
+import {usePrivy, useFiatOnramp} from '@privy-io/react-auth';
+import {useExportWallet} from '@privy-io/react-auth/solana';
 import {createSolanaRpc} from '@solana/kit';
 
-const PRESETS = ['0.25', '0.5', '1'];
+// CAIP-2 идентификатор основной сети Solana
+const SOLANA_CHAIN = 'solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp';
+
+const TOKENS = {
+  SOL: {label: 'SOL', asset: 'So11111111111111111111111111111111111111112'},
+  USDC: {label: 'USDC', asset: 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v'}
+};
+
+const PRESETS = ['25', '50', '100'];
 const RPC_URL = import.meta.env.VITE_SOLANA_RPC || 'https://api.mainnet-beta.solana.com';
 
 function shorten(address) {
@@ -11,24 +19,16 @@ function shorten(address) {
   return `${address.slice(0, 4)}…${address.slice(-4)}`;
 }
 
-function buildAttempts(address, amount) {
-  return [
-    {address, options: {amount: String(amount), asset: 'SOL'}},
-    {address, options: {amount: String(amount)}},
-    {address}
-  ];
-}
-
-const RETRYABLE = /not enabled|not supported|unsupported|invalid|unknown/i;
-
 export default function App() {
   const {ready, authenticated, login, logout, user} = usePrivy();
-  const {fundWallet} = useFundWallet();
+  const {fund} = useFiatOnramp();
   const {exportWallet} = useExportWallet();
 
-  const [amount, setAmount] = useState('0.5');
+  const [token, setToken] = useState('SOL');
+  const [amount, setAmount] = useState('50');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
+  const [notice, setNotice] = useState(null);
   const [copied, setCopied] = useState(false);
   const [balance, setBalance] = useState(null);
 
@@ -50,7 +50,6 @@ export default function App() {
       const {value} = await rpc.getBalance(solanaAddress).send();
       setBalance(Number(value) / 1_000_000_000);
     } catch {
-      // публичный RPC часто режет браузерные запросы — просто не показываем баланс
       setBalance(null);
     }
   }, [solanaAddress]);
@@ -62,23 +61,35 @@ export default function App() {
   async function handleBuy() {
     if (!solanaAddress || !amountValid) return;
     setError(null);
+    setNotice(null);
     setBusy(true);
 
-    let lastError = null;
-    for (const payload of buildAttempts(solanaAddress, amount)) {
-      try {
-        await fundWallet(payload);
-        setBusy(false);
-        refreshBalance();
-        return;
-      } catch (e) {
-        lastError = e;
-        if (!RETRYABLE.test(e?.message || '')) break;
-      }
-    }
+    try {
+      const result = await fund({
+        source: {
+          assets: ['usd', 'eur'],
+          defaultAsset: 'usd'
+        },
+        destination: {
+          asset: TOKENS[token].asset,
+          chain: SOLANA_CHAIN,
+          address: solanaAddress
+        },
+        environment: 'production',
+        defaultAmount: String(amount)
+      });
 
-    setError(lastError?.message || 'Не удалось открыть окно оплаты.');
-    setBusy(false);
+      if (result?.status === 'confirmed') {
+        setNotice('Оплата прошла. Монеты появятся на балансе в течение нескольких минут.');
+        refreshBalance();
+      } else if (result?.status === 'submitted') {
+        setNotice('Платёж отправлен и обрабатывается провайдером.');
+      }
+    } catch (e) {
+      setError(e?.message || 'Не удалось открыть окно оплаты.');
+    } finally {
+      setBusy(false);
+    }
   }
 
   async function copyAddress() {
@@ -107,7 +118,7 @@ export default function App() {
 
       <main className="main">
         <section className="hero">
-          <h1>Купить SOL за пару минут</h1>
+          <h1>Купить крипту за пару минут</h1>
           <p className="lede">
             Карта, Apple&nbsp;Pay или Google&nbsp;Pay. Кошелёк создаётся автоматически при входе —
             ничего скачивать и записывать не нужно.
@@ -145,7 +156,20 @@ export default function App() {
                 )}
               </div>
 
-              <div className="label spaced">Сколько покупаем</div>
+              <div className="label spaced">Что покупаем</div>
+              <div className="presets two">
+                {Object.keys(TOKENS).map((key) => (
+                  <button
+                    key={key}
+                    className={`preset ${token === key ? 'active' : ''}`}
+                    onClick={() => setToken(key)}
+                  >
+                    {TOKENS[key].label}
+                  </button>
+                ))}
+              </div>
+
+              <div className="label spaced">На какую сумму</div>
               <div className="presets">
                 {PRESETS.map((p) => (
                   <button
@@ -153,7 +177,7 @@ export default function App() {
                     className={`preset ${amount === p ? 'active' : ''}`}
                     onClick={() => setAmount(p)}
                   >
-                    {p} SOL
+                    ${p}
                   </button>
                 ))}
               </div>
@@ -163,9 +187,9 @@ export default function App() {
                   inputMode="decimal"
                   value={amount}
                   onChange={(e) => setAmount(e.target.value.replace(',', '.'))}
-                  aria-label="Количество SOL"
+                  aria-label="Сумма в долларах"
                 />
-                <span className="suffix">SOL</span>
+                <span className="suffix">USD</span>
               </div>
 
               <button
@@ -173,16 +197,20 @@ export default function App() {
                 disabled={!solanaAddress || !amountValid || busy}
                 onClick={handleBuy}
               >
-                {busy ? 'Открываю оплату…' : 'Купить SOL'}
+                {busy ? 'Открываю оплату…' : `Купить ${TOKENS[token].label}`}
               </button>
 
               {error && <p className="error">{error}</p>}
+              {notice && <p className="notice">{notice}</p>}
 
               <div className="row-actions">
                 <button className="ghost small" onClick={refreshBalance}>
                   Обновить баланс
                 </button>
-                <button className="ghost small" onClick={() => exportWallet({address: solanaAddress})}>
+                <button
+                  className="ghost small"
+                  onClick={() => exportWallet({address: solanaAddress})}
+                >
                   Забрать приватный ключ
                 </button>
               </div>
@@ -209,7 +237,7 @@ export default function App() {
           <div className="step">
             <span className="num">3</span>
             <h3>Готово</h3>
-            <p>SOL приходит на твой адрес в Solana.</p>
+            <p>Монеты приходят на твой адрес в Solana.</p>
           </div>
         </section>
       </main>
